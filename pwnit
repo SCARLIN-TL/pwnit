@@ -1,0 +1,112 @@
+#!/bin/bash
+
+# Word list for attacks
+wl=""
+# List of created hashes for attack
+hash_list=()
+
+# Function for converting pcap to h22000
+conv_hccap () {
+	local pcap=$1
+	hccap_name=$(basename "$pcap" .${pcap##*.})".hc22000"
+
+	hcxpcapngtool -o $HOME/pwnitFiles/hash/$hccap_name $pcap | grep "RC checked" > /dev/null 2>&1
+
+	hc_check=$?
+	if [ $hc_check -eq 0 ]; then
+		echo "[SUCCESSFULLY MADE]...$hccap_name"
+		hash_list+=("$hccap_name")
+		sleep 1
+	else
+		echo "[FAILED TO MAKE]...$hccap_name"
+	fi
+}
+
+# Function for running hashcat
+hash_crack () {
+	for hash in "${hash_list[@]}"; do
+		hashcat -m 22000 $HOME/pwnitFiles/hash/$hash $wl --status --status-timer=1 2>&1| while IFS= read -r line; do
+			if echo "$line" | grep -q "Hash.Target"; then
+        			hash=$(echo "$line" | awk -F':' '{print $2}' | xargs)
+        			printf "Cracking Hash: %s\r" "$hash"
+    			elif echo "$line" | grep -q "Progress"; then
+        			progress=$(echo "$line" | awk -F':' '{print $2}' | xargs)
+        			printf "Progress: %s\r" "$progress"
+    			fi
+		done
+	done
+}
+
+# Function for directory based attacks
+dir_atk_fun () {
+        local atk_dir=$1
+        if [[ -d $atk_dir ]]; then
+                for file in $atk_dir/*; do
+                	if [[ "${file##*.}" == "pcap" || "${file##*.}" == "pcapng" ]]; then
+						conv_hccap "$file"
+                    else
+                        echo "[FILE FORMAT INVALID]...""$file"
+                    fi
+                done
+
+		if [[ ${#hash_list[@]} -eq 0 ]]; then
+                	echo "[NO HASHES CREATED]"
+                        	exit 0
+                	else
+                                hash_crack
+               	fi
+        else
+                echo "[DIRECTORY NOT FOUND]"
+        fi
+}
+
+# Function for single file based attacks
+file_atk_fun () {
+	local atk_file=$1
+	if [[ -f "$atk_file" && "${atk_file##*.}" == "pcap" ]]; then
+        	conv_hccap "$atk_file"
+	else
+        	echo "[PCAP FILE NOT FOUND]"
+	fi
+
+	if [[ ${#hash_list[@]} -eq 0 ]]; then
+                echo "[NO HASHES CREATED]"
+                exit 1
+        else
+                hash_crack
+        fi
+
+}
+
+while getopts "f:d:l:h" opt; do
+	case $opt in
+		f)
+			file_atk_fun "$OPTARG"
+		;;
+		d)
+			dir_atk_fun "$OPTARG"
+		;;
+		l)
+			if [[ -f $OPTARG && "${OPTARG##*.}" == "txt" ]]; then
+				wl="$OPTARG"
+			else
+				echo "[WORD LIST NOT FOUND. FORMAT MUST BE .txt]"
+				exit 0
+			fi
+		;;
+		h)
+			#	Print help screen
+			echo
+			echo "Basic use: gotchi -l <wordlist(full path)>  [ -option <arg full path]>] "
+			echo
+			echo "OPTIONS:  "
+			echo "pwnit -l <wordlist (required)>		 Specify word list for attack. Switch is required to run and" 
+			echo "						 following switches. (use full path)"
+			echo
+			echo "pwnit <wl> -f <pcap file(full path)>	 Used for individual capture attack. Must be .pcap or .pcapng"
+			echo
+			echo "pwnit <wl> -d <directory(full path)>	 Used for attack on directories full of capture files. Will flag"
+			echo "					if conversion failes. If more than one file succesfully converted"
+		;;
+	esac
+done 
