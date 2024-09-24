@@ -36,11 +36,12 @@ hash_crack () {
 		echo Failed...........:"$bad_hash"
 		echo ""
 	else	
-		echo ""	
+		echo ""
 	fi
 	for hash in "${hash_list[@]}"; do
 		echo Target...........:$hash
 		hashcat -m 22000 $HOME/gotchi/hash/$hash $wl --status --status-timer=2 2>&1 | grep --line-buffered -E "Progress" | awk '{printf "\r%s", $0}'
+		echo ""
 		echo ""
 	done
 }
