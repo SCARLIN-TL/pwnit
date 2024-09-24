@@ -41,6 +41,7 @@ hash_crack () {
 	for hash in "${hash_list[@]}"; do
 		echo Target...........:$hash
 		hashcat -m 22000 $HOME/gotchi/hash/$hash $wl --status --status-timer=2 2>&1 | grep --line-buffered -E "Progress" | awk '{printf "\r%s", $0}'
+		echo ""
 	done
 }
 
